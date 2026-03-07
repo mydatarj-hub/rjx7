@@ -1,25 +1,19 @@
 import flet as ft
 import json
 import os
-import asyncio
+from datetime import datetime
 import re
 
 DATA_FILE = "data.json"
 
-# الحسابات لتسجيل الدخول
-BARBER_ACCOUNTS = {
+BARBERS = {
     "oussama": "1234567",
     "khireeddine": "1234567891011",
     "zaki": "1234",
-    "mounir": "123456",
     "maztoule": "12345678",
+    "mounir": "123456",
+    "mohamed bosta": "12345678",
 }
-
-# أسماء الحلاقين للعرض فقط (كبيرة)
-BARBER_DISPLAY_NAMES = ["KHIREEDDINE", "OUSSAMA", "ZAKI", "MAZTOULE", "MOUNIR"]
-
-# تحويل اسم العرض إلى اسم الحساب الأصلي
-DISPLAY_TO_ACCOUNT = {name.upper(): name for name in BARBER_ACCOUNTS.keys()}
 
 TIME_SLOTS = [
     "09:00","09:30","10:00","10:30",
@@ -36,246 +30,188 @@ def load_data():
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, indent=2)
 
-async def main(page: ft.Page):
-    page.title = "Barber Shop"
-    page.scroll = "auto"
-    page.horizontal_alignment = "center"
-    page.vertical_alignment = "center"
-    page.window.width = 390
-    page.window.height = 700
-    page.scroll = "auto"
+def main(page: ft.Page):
+    page.title = "Elite Barber"
+    page.window.width = 400
+    page.window.height = 800
     page.padding = 20
-    page.window.resizable = False
+    page.theme_mode = ft.ThemeMode.SYSTEM
+    page.theme = ft.Theme(color_scheme_seed=ft.Colors.BLUE)
 
-    dialog = ft.AlertDialog(modal=True)
-    page.dialog = dialog
-
-    async def show_message(title, message, color):
-        dialog.title = ft.Text(title, color=color, weight="bold")
-        dialog.content = ft.Text(message)
-        dialog.actions = [ft.TextButton("OK", on_click=lambda e: close_dialog())]
-        dialog.open = True
+    def snack(msg, color=ft.Colors.GREEN):
+        page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=color)
+        page.snack_bar.open = True
         page.update()
 
-    def close_dialog():
-        dialog.open = False
-        page.update()
-
-    # ---------- Home ----------
-    async def show_home():
+    def home():
         page.controls.clear()
-        welcome_text = ft.Text(
-            "Welcome To Your New Look ✂️",
-            size=20,
-            weight="bold",
-            opacity=0,
-            animate_opacity=1000
-        )
         page.add(
             ft.Column(
                 [
-                    welcome_text,
+                    ft.Text("ELITE BARBER", size=28, weight="bold"),
+                    ft.Text("Premium Booking Experience"),
                     ft.Divider(),
-                    ft.Text("Choose Your Role", size=20),
-                    ft.ElevatedButton("💈 I am a Barber", on_click=show_barber_login),
-                    ft.ElevatedButton("🧑 I am a Client", on_click=show_client_page),
-                    ft.Divider(),
-                    ft.Text("Developed by KHIRE_EDDINE_RJ7", size=12)
+                    ft.FilledButton("💈 Barber Login", width=250, on_click=barber_login),
+                    ft.OutlinedButton("🧑 Book Appointment", width=250, on_click=client_page),
+                    ft.IconButton(icon=ft.Icons.DARK_MODE, on_click=toggle_theme)
                 ],
-                horizontal_alignment="center"
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                expand=True,
+                spacing=20
             )
         )
         page.update()
-        await asyncio.sleep(0.5)
-        welcome_text.opacity = 1
+
+    def toggle_theme(e):
+        page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
         page.update()
 
-    # ---------- Client ----------
-    def show_client_page(e=None):
-        name = ft.TextField(label="Name", width=300)
-        phone = ft.TextField(label="Phone", width=300, value="+213")
-        barber = ft.Dropdown(
+    def client_page(e=None):
+        name = ft.TextField(label="Full Name", width=320)
+        phone = ft.TextField(label="Phone (+213)", value="+213", width=320)
+        phone.on_change = lambda e: setattr(phone, "value", "+213") if not phone.value.startswith("+213") else None
+
+        barber_dropdown = ft.Dropdown(
             label="Choose Barber",
-            width=300,
-            options=[ft.dropdown.Option(b) for b in BARBER_DISPLAY_NAMES]
+            width=320,
+            options=[ft.dropdown.Option(key=b, text=b.upper()) for b in BARBERS]
         )
+
         time = ft.Dropdown(
             label="Choose Time",
-            width=300,
+            width=320,
             options=[ft.dropdown.Option(t) for t in TIME_SLOTS]
         )
-        date_text = ft.Text("No date selected")
 
-        def on_date_change(e):
-            date_text.value = e.control.value.strftime("%Y-%m-%d")
-            page.update()
+        selected_date = ft.Text("Select Date")
+        picker = ft.DatePicker(on_change=lambda e: setattr(selected_date, "value", e.control.value.strftime("%Y-%m-%d")))
+        page.overlay.append(picker)
 
-        date_picker = ft.DatePicker(on_change=on_date_change)
-        page.overlay.append(date_picker)
-
-        def open_date(e):
-            date_picker.open = True
-            page.update()
-
-        async def book(e):
-            if not name.value or not phone.value:
-                await show_message("⚠ Error", "Fill all fields", "orange")
+        def book(e):
+            if not name.value:
+                snack("Enter your name", ft.Colors.RED)
                 return
-            if not re.fullmatch(r"\+?\d+", phone.value):
-                await show_message("⚠ Error", "Phone must be numbers with +", "orange")
+            if not re.fullmatch(r"\+213\d+", phone.value):
+                snack("Invalid phone", ft.Colors.RED)
                 return
-            if not barber.value or not time.value:
-                await show_message("⚠ Error", "Select barber and time", "orange")
+            if not barber_dropdown.value or not time.value:
+                snack("Select barber and time", ft.Colors.RED)
                 return
-            if date_text.value == "No date selected":
-                await show_message("⚠ Error", "Select date", "orange")
+            if selected_date.value == "Select Date":
+                snack("Choose a date", ft.Colors.RED)
                 return
-
-            # تحويل اسم العرض إلى اسم الحساب الأصلي
-            barber_account_name = DISPLAY_TO_ACCOUNT[barber.value.upper()]
 
             data = load_data()
-            # التحقق من تكرار الموعد
             for a in data:
-                if a["barber"] == barber_account_name and a["date"] == date_text.value and a["time"] == time.value:
-                    await show_message("❌ Not Available", "Time already booked", "red")
+                if a["barber"] == barber_dropdown.value and a["date"] == selected_date.value and a["time"] == time.value:
+                    snack("Time already booked", ft.Colors.RED)
                     return
 
-            # إضافة الموعد
             data.append({
                 "name": name.value,
                 "phone": phone.value,
-                "barber": barber_account_name,
-                "date": date_text.value,
-                "time": time.value,
+                "barber": barber_dropdown.value,
+                "date": selected_date.value,
+                "time": time.value
             })
             save_data(data)
-            await show_message("✅ Success", "Appointment booked", "green")
-
-            # إعادة ضبط الحقول
-            name.value = ""
-            phone.value = "+213"
-            barber.value = None
-            time.value = None
-            date_text.value = "No date selected"
-            page.update()
+            snack("Appointment Confirmed 🎉")
+            home()
 
         page.controls.clear()
         page.add(
             ft.Column(
                 [
-                    ft.Text("Client Booking", size=24, weight="bold"),
-                    name,
-                    phone,
-                    barber,
-                    ft.ElevatedButton("Select Date", on_click=open_date),
-                    date_text,
-                    time,
-                    ft.ElevatedButton("Book Appointment", on_click=book),
-                    ft.TextButton("⬅ Back", on_click=lambda e: asyncio.create_task(show_home()))
+                    ft.Text("Book Appointment", size=24, weight="bold"),
+                    name, phone, barber_dropdown,
+                    ft.FilledButton("Select Date", on_click=lambda e: setattr(picker, "open", True)),
+                    selected_date, time,
+                    ft.FilledButton("Confirm Booking", on_click=book),
+                    ft.TextButton("Back", on_click=home)
                 ],
-                horizontal_alignment="center"
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=15
             )
         )
         page.update()
 
-    # ---------- Barber Login ----------
-    def show_barber_login(e=None):
-        username = ft.TextField(label="Username", width=300)
-        password = ft.TextField(label="Password", password=True, width=300)
+    def barber_login(e=None):
+        user = ft.TextField(label="Username", width=320)
+        pwd = ft.TextField(label="Password", password=True, width=320)
 
-        async def login(e):
-            if username.value in BARBER_ACCOUNTS and BARBER_ACCOUNTS[username.value] == password.value:
-                show_barber_dashboard(username.value)
+        def login(e):
+            if user.value in BARBERS and BARBERS[user.value] == pwd.value:
+                dashboard(user.value)
             else:
-                await show_message("❌ Error", "Wrong credentials", "red")
+                snack("Wrong credentials", ft.Colors.RED)
 
         page.controls.clear()
         page.add(
             ft.Column(
                 [
                     ft.Text("Barber Login", size=24, weight="bold"),
-                    username,
-                    password,
-                    ft.ElevatedButton("Login", on_click=login),
-                    ft.TextButton("⬅ Back", on_click=lambda e: asyncio.create_task(show_home()))
+                    user, pwd,
+                    ft.FilledButton("Login", on_click=login),
+                    ft.TextButton("Back", on_click=home)
                 ],
-                horizontal_alignment="center"
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=15
             )
         )
         page.update()
 
-    # ---------- Barber Dashboard ----------
-    def show_barber_dashboard(barber_name):
-        page.controls.clear()
-        appointments_column = ft.Column([], spacing=10)
+    def dashboard(barber_name):
+        search = ft.TextField(label="Search client", width=320)
+        appointments_list = ft.ListView(expand=True, spacing=5, padding=10, auto_scroll=True)
 
-        def build_appointments():
-            appointments_column.controls.clear()
-            count = 0
-            for a in load_data():
-                if a["barber"] == barber_name:
-                    count += 1
-                    def delete_appointment(e, appt=a):
-                        d = load_data()
-                        d.remove(appt)
-                        save_data(d)
-                        build_appointments()
-                    appointments_column.controls.append(
-                        ft.Card(
-                            content=ft.Container(
-                                padding=10,
-                                content=ft.Column([
+        def refresh():
+            appointments_list.controls.clear()
+            data = [a for a in load_data() if a["barber"] == barber_name]
+            today = datetime.now().strftime("%Y-%m-%d")
+            today_count = sum(1 for a in data if a["date"] == today)
+            appointments_list.controls.append(ft.Text(f"Today's Appointments: {today_count}", weight="bold"))
+
+            for a in data:
+                if search.value and search.value.lower() not in a["name"].lower():
+                    continue
+                appointments_list.controls.append(
+                    ft.Card(
+                        content=ft.Container(
+                            padding=15,
+                            content=ft.Column(
+                                [
                                     ft.Text(f"{a['date']} - {a['time']}", weight="bold"),
-                                    ft.Text(f"Client: {a['name']}"),
-                                    ft.Text(f"Phone: {a['phone']}"),
-                                    ft.Row([
-                                        ft.IconButton(
-                                            icon=ft.Icons.CALL,
-                                            on_click=lambda e, p=a["phone"]: page.launch_url(f"tel:{p}")
-                                        ),
-                                        ft.IconButton(
-                                            icon=ft.Icons.DELETE,
-                                            icon_color="red",
-                                            on_click=delete_appointment
-                                        )
-                                    ])
-                                ])
+                                    ft.Text(a["name"]),
+                                    ft.Text(a["phone"]),
+                                    ft.IconButton(icon=ft.Icons.CALL, on_click=lambda e, p=a["phone"]: page.launch_url(f"tel:{p}"))
+                                ]
                             )
                         )
                     )
-            if count == 0:
-                appointments_column.controls.append(ft.Text("No appointments yet"))
+                )
             page.update()
 
-        async def auto_refresh():
-            previous_count = len([a for a in load_data() if a["barber"] == barber_name])
-            while True:
-                await asyncio.sleep(5)
-                current_count = len([a for a in load_data() if a["barber"] == barber_name])
-                if current_count > previous_count:
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text("🔔 New appointment received!"),
-                        bgcolor="green"
-                    )
-                    page.snack_bar.open = True
-                previous_count = current_count
-                build_appointments()
+        search.on_change = refresh
 
+        page.controls.clear()
         page.add(
-            ft.Column([
-                ft.Text(f"Welcome {barber_name}", size=24, weight="bold"),
-                ft.Text("Your Appointments:", size=18),
-                appointments_column,
-                ft.TextButton("⬅ Logout", on_click=lambda e: asyncio.create_task(show_home()))
-            ], horizontal_alignment="center")
+            ft.Column(
+                [
+                    search,
+                    appointments_list,
+                    ft.Row(
+                        [ft.IconButton(icon=ft.Icons.LOGOUT, on_click=home, tooltip="Logout", icon_color=ft.Colors.RED)],
+                        alignment=ft.MainAxisAlignment.END
+                    )
+                ],
+                expand=True
+            )
         )
+        refresh()
 
-        build_appointments()
-        asyncio.create_task(auto_refresh())
+    home()
 
-    await show_home()
-
-ft.run(main)
+ft.app(target=main)
