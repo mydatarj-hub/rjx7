@@ -1,9 +1,9 @@
 name: Build iOS App
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
-  workflow_dispatch:
 
 env:
   PYTHON_VERSION: 3.12
@@ -33,12 +33,12 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      - name: Build iOS
+      - name: Build IPA
         run: |
-          flet build ios
+          flet build ipa --verbose
 
-      - name: Upload iOS build
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
-          path: build/ios
+          name: ios-ipa
+          path: build/ipa
